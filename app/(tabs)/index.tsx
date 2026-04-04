@@ -12,8 +12,8 @@ export default function FinanceApp() {
   const [category, setCategory] = useState('Food');
   const [transactionType, setTransactionType] = useState('expense');
   const [activeTab, setActiveTab] = useState('transactions');
-  const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [isLoading, setIsLoading] = useState(true);
 
   const categories = transactionType === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
@@ -22,33 +22,33 @@ export default function FinanceApp() {
   }, [transactionType]);
 
   useEffect(() => {
-    loadData();
+    loadTransactions();
   }, []);
 
   useEffect(() => {
-    if (!isLoading) {
-      saveData();
+    if (!isLoading && transactions.length >= 0) {
+      saveTransactions();
     }
   }, [transactions]);
 
-  const loadData = async () => {
+  const loadTransactions = async () => {
     try {
       const saved = await AsyncStorage.getItem(STORAGE_KEY);
       if (saved) {
         setTransactions(JSON.parse(saved));
       }
-      setIsLoading(false);
     } catch (error) {
-      console.error('Error loading:', error);
+      console.log('Error loading:', error);
+    } finally {
       setIsLoading(false);
     }
   };
 
-  const saveData = async () => {
+  const saveTransactions = async () => {
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
     } catch (error) {
-      console.error('Error saving:', error);
+      console.log('Error saving:', error);
     }
   };
 
@@ -73,10 +73,7 @@ export default function FinanceApp() {
   };
 
   const handleDeleteTransaction = (id) => {
-    console.log('Deleting transaction with id:', id);
-    const updated = transactions.filter(t => t.id !== id);
-    console.log('Updated transactions:', updated.length);
-    setTransactions(updated);
+    setTransactions(prev => prev.filter(t => t.id !== id));
   };
 
   const clearAllTransactions = () => {
@@ -88,9 +85,13 @@ export default function FinanceApp() {
         {
           text: 'Delete All',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             setTransactions([]);
-            AsyncStorage.removeItem(STORAGE_KEY);
+            try {
+              await AsyncStorage.removeItem(STORAGE_KEY);
+            } catch (error) {
+              console.log('Error clearing:', error);
+            }
           },
         },
       ]
@@ -132,11 +133,18 @@ export default function FinanceApp() {
 
   const renderTransaction = ({ item }) => (
     <View style={styles.transactionCard}>
-      <View style={styles.transactionInfo}>
-        <Text style={styles.category}>{item.category}</Text>
-        <Text style={styles.date}>{item.date}</Text>
+      <View style={styles.transactionLeft}>
+        <View style={[styles.categoryIcon, { backgroundColor: item.type === 'income' ? '#e8f5e9' : '#ffebee' }]}>
+          <Text style={styles.categoryIconText}>
+            {item.type === 'income' ? '📥' : '📤'}
+          </Text>
+        </View>
+        <View style={styles.transactionInfo}>
+          <Text style={styles.category}>{item.category}</Text>
+          <Text style={styles.date}>{item.date}</Text>
+        </View>
       </View>
-      <View style={styles.transactionAmount}>
+      <View style={styles.transactionRight}>
         <Text style={[
           styles.amount,
           { color: item.type === 'income' ? '#4CAF50' : '#FF5252' }
@@ -144,13 +152,10 @@ export default function FinanceApp() {
           {item.type === 'income' ? '+' : '-'}€{item.amount.toFixed(2)}
         </Text>
         <TouchableOpacity 
-          style={styles.deleteBtn} 
-          onPress={() => {
-            console.log('Delete button pressed for:', item.id);
-            handleDeleteTransaction(item.id);
-          }}
+          onPress={() => handleDeleteTransaction(item.id)}
+          style={styles.deleteIconBtn}
         >
-          <Text style={styles.deleteBtnText}>Delete</Text>
+          <Text style={styles.deleteIcon}>×</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -164,13 +169,15 @@ export default function FinanceApp() {
       <View>
         {Object.values(spendingByCategory).some(v => v > 0) && (
           <>
-            <Text style={[styles.summaryTitle, { color: '#FF5252' }]}>💸 Expenses</Text>
+            <Text style={styles.summaryTitle}>Expenses</Text>
             {Object.entries(spendingByCategory).map(([cat, amount]) =>
               amount > 0 && (
                 <View key={cat} style={styles.summaryRow}>
                   <Text style={styles.summaryCategory}>{cat}</Text>
-                  <Text style={styles.summaryAmount}>-€{amount.toFixed(2)}</Text>
-                  <View style={[styles.summaryBar, { width: `${(amount / maxExpense) * 100}%` }]} />
+                  <View style={styles.summaryRightContainer}>
+                    <View style={[styles.summaryBar, { width: `${(amount / maxExpense) * 100}%` }]} />
+                    <Text style={styles.summaryAmount}>€{amount.toFixed(2)}</Text>
+                  </View>
                 </View>
               )
             )}
@@ -179,13 +186,15 @@ export default function FinanceApp() {
 
         {Object.values(incomeByCategory).some(v => v > 0) && (
           <>
-            <Text style={[styles.summaryTitle, { marginTop: 25, color: '#4CAF50' }]}>💵 Income</Text>
+            <Text style={[styles.summaryTitle, { marginTop: 30 }]}>Income</Text>
             {Object.entries(incomeByCategory).map(([cat, amount]) =>
               amount > 0 && (
                 <View key={cat} style={styles.summaryRow}>
                   <Text style={styles.summaryCategory}>{cat}</Text>
-                  <Text style={[styles.summaryAmount, { color: '#4CAF50' }]}>+€{amount.toFixed(2)}</Text>
-                  <View style={[styles.summaryBar, { backgroundColor: '#4CAF50', width: `${(amount / maxIncome) * 100}%` }]} />
+                  <View style={styles.summaryRightContainer}>
+                    <View style={[styles.summaryBar, { backgroundColor: '#4CAF50', width: `${(amount / maxIncome) * 100}%` }]} />
+                    <Text style={[styles.summaryAmount, { color: '#4CAF50' }]}>€{amount.toFixed(2)}</Text>
+                  </View>
                 </View>
               )
             )}
@@ -198,35 +207,36 @@ export default function FinanceApp() {
   if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={styles.title}>Loading...</Text>
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <Text style={styles.title}>💰 Finance Tracker</Text>
-          <TouchableOpacity onPress={clearAllTransactions}>
-            <Text style={styles.clearBtn}>🗑️</Text>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerSubtitle}>Total Balance</Text>
+            <Text style={[styles.headerBalance, { color: totalBalance >= 0 ? '#1a1a1a' : '#FF5252' }]}>
+              €{totalBalance.toFixed(2)}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={clearAllTransactions} style={styles.headerButton}>
+            <Text style={styles.headerButtonText}>⋮</Text>
           </TouchableOpacity>
-        </View>
-        <View style={styles.balanceBox}>
-          <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={[styles.balance, { color: totalBalance >= 0 ? '#4CAF50' : '#FF5252' }]}>
-            €{totalBalance.toFixed(2)}
-          </Text>
         </View>
       </View>
 
+      {/* Tabs */}
       <View style={styles.tabSelector}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'transactions' && styles.tabActive]}
           onPress={() => setActiveTab('transactions')}
         >
           <Text style={[styles.tabText, activeTab === 'transactions' && styles.tabActiveText]}>
-            📝 Transactions
+            Transactions
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -234,52 +244,59 @@ export default function FinanceApp() {
           onPress={() => setActiveTab('summary')}
         >
           <Text style={[styles.tabText, activeTab === 'summary' && styles.tabActiveText]}>
-            📊 Summary
+            Summary
           </Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.typeSelector}>
-          <TouchableOpacity
-            style={[styles.typeBtn, transactionType === 'income' && styles.typeActive]}
-            onPress={() => setTransactionType('income')}
-          >
-            <Text style={[styles.typeBtnText, transactionType === 'income' && styles.typeActiveText]}>
-              💵 Income
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.typeBtn, transactionType === 'expense' && styles.typeActive]}
-            onPress={() => setTransactionType('expense')}
-          >
-            <Text style={[styles.typeBtnText, transactionType === 'expense' && styles.typeActiveText]}>
-              💸 Expense
-            </Text>
-          </TouchableOpacity>
+        {/* Transaction Type */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Type</Text>
+          <View style={styles.typeSelector}>
+            <TouchableOpacity
+              style={[styles.typeBtn, transactionType === 'income' && styles.typeActive]}
+              onPress={() => setTransactionType('income')}
+            >
+              <Text style={[styles.typeBtnText, transactionType === 'income' && styles.typeActiveText]}>
+                Income
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.typeBtn, transactionType === 'expense' && styles.typeActive]}
+              onPress={() => setTransactionType('expense')}
+            >
+              <Text style={[styles.typeBtnText, transactionType === 'expense' && styles.typeActiveText]}>
+                Expense
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={styles.inputSection}>
-          <Text style={styles.label}>Amount</Text>
+        {/* Amount */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Amount</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter amount"
+            placeholder="0.00"
+            placeholderTextColor="#ccc"
             keyboardType="decimal-pad"
             value={amount}
             onChangeText={setAmount}
           />
         </View>
 
-        <View style={styles.inputSection}>
-          <Text style={styles.label}>Category</Text>
+        {/* Category */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Category</Text>
           <View style={styles.categoryButtons}>
             {categories.map(cat => (
               <TouchableOpacity
                 key={cat}
-                style={[styles.categoryBtn, category === cat && styles.categoryActive]}
+                style={[styles.categoryBtn, category === cat && styles.categoryBtnActive]}
                 onPress={() => setCategory(cat)}
               >
-                <Text style={[styles.categoryBtnText, category === cat && styles.categoryActiveText]}>
+                <Text style={[styles.categoryBtnText, category === cat && styles.categoryBtnActiveText]}>
                   {cat}
                 </Text>
               </TouchableOpacity>
@@ -287,14 +304,15 @@ export default function FinanceApp() {
           </View>
         </View>
 
-        <View style={styles.inputSection}>
-          <Text style={styles.label}>Date</Text>
+        {/* Date */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Date</Text>
           <View style={styles.datePickerContainer}>
             <TouchableOpacity 
               style={styles.dateNavBtn}
               onPress={() => handleDateChange(-1)}
             >
-              <Text style={styles.dateNavBtnText}>◀</Text>
+              <Text style={styles.dateNavBtnText}>←</Text>
             </TouchableOpacity>
             
             <View style={styles.dateDisplay}>
@@ -305,7 +323,7 @@ export default function FinanceApp() {
               style={styles.dateNavBtn}
               onPress={() => handleDateChange(1)}
             >
-              <Text style={styles.dateNavBtnText}>▶</Text>
+              <Text style={styles.dateNavBtnText}>→</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity 
@@ -316,15 +334,17 @@ export default function FinanceApp() {
           </TouchableOpacity>
         </View>
 
+        {/* Add Button */}
         <TouchableOpacity style={styles.addBtn} onPress={addTransaction}>
-          <Text style={styles.addBtnText}>+ Add Transaction</Text>
+          <Text style={styles.addBtnText}>Add Transaction</Text>
         </TouchableOpacity>
 
+        {/* Transactions or Summary */}
         {activeTab === 'transactions' ? (
           <View style={styles.listSection}>
-            <Text style={styles.listTitle}>Transactions ({transactions.length})</Text>
+            <Text style={styles.listTitle}>{transactions.length} transactions</Text>
             {transactions.length === 0 ? (
-              <Text style={styles.emptyText}>No transactions yet!</Text>
+              <Text style={styles.emptyText}>No transactions yet</Text>
             ) : (
               <FlatList
                 data={transactions}
@@ -336,7 +356,7 @@ export default function FinanceApp() {
           </View>
         ) : (
           <View style={styles.listSection}>
-            <Text style={styles.listTitle}>Summary</Text>
+            <Text style={styles.listTitle}>Breakdown</Text>
             {renderCategorySummary()}
           </View>
         )}
@@ -348,58 +368,58 @@ export default function FinanceApp() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#fafafa',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#999',
   },
   header: {
-    backgroundColor: '#2c3e50',
-    padding: 20,
-    paddingTop: 40,
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 30,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  headerTop: {
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
+    alignItems: 'flex-start',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '500',
+    marginBottom: 4,
   },
-  clearBtn: {
+  headerBalance: {
+    fontSize: 36,
+    fontWeight: '700',
+  },
+  headerButton: {
+    padding: 8,
+  },
+  headerButtonText: {
     fontSize: 24,
-    padding: 5,
-  },
-  balanceBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    padding: 15,
-    borderRadius: 10,
-  },
-  balanceLabel: {
-    color: '#fff',
-    fontSize: 14,
-    opacity: 0.7,
-  },
-  balance: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginTop: 5,
+    color: '#1a1a1a',
   },
   tabSelector: {
     flexDirection: 'row',
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: '#f0f0f0',
+    paddingHorizontal: 20,
   },
   tab: {
     flex: 1,
-    paddingVertical: 15,
+    paddingVertical: 16,
     alignItems: 'center',
-    borderBottomWidth: 3,
+    borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: '#3498db',
+    borderBottomColor: '#1a1a1a',
   },
   tabText: {
     fontSize: 14,
@@ -407,54 +427,57 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   tabActiveText: {
-    color: '#3498db',
+    color: '#1a1a1a',
   },
   content: {
     flex: 1,
     padding: 20,
   },
+  section: {
+    marginBottom: 24,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   typeSelector: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
+    gap: 12,
   },
   typeBtn: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#ddd',
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   typeActive: {
-    backgroundColor: '#3498db',
-    borderColor: '#3498db',
+    backgroundColor: '#1a1a1a',
+    borderColor: '#1a1a1a',
   },
   typeBtnText: {
     textAlign: 'center',
     fontWeight: '600',
     color: '#666',
+    fontSize: 14,
   },
   typeActiveText: {
     color: '#fff',
   },
-  inputSection: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2c3e50',
-    marginBottom: 8,
-  },
   input: {
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#e0e0e0',
     borderRadius: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
+    fontWeight: '500',
   },
   categoryButtons: {
     flexDirection: 'row',
@@ -462,67 +485,70 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   categoryBtn: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f5f5f5',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#e0e0e0',
   },
-  categoryActive: {
-    backgroundColor: '#27ae60',
-    borderColor: '#27ae60',
+  categoryBtnActive: {
+    backgroundColor: '#1a1a1a',
+    borderColor: '#1a1a1a',
   },
   categoryBtnText: {
     color: '#666',
     fontWeight: '500',
+    fontSize: 13,
   },
-  categoryActiveText: {
+  categoryBtnActiveText: {
     color: '#fff',
   },
   datePickerContainer: {
     flexDirection: 'row',
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#e0e0e0',
     borderRadius: 8,
     alignItems: 'center',
   },
   dateNavBtn: {
-    paddingHorizontal: 15,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   dateNavBtnText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#3498db',
+    color: '#666',
+    fontWeight: '600',
   },
   dateDisplay: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   dateText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#2c3e50',
+    fontWeight: '500',
+    color: '#1a1a1a',
   },
   todayBtn: {
-    backgroundColor: '#e8f4f8',
+    backgroundColor: '#f5f5f5',
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderRadius: 4,
     marginTop: 8,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   todayBtnText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#3498db',
+    color: '#666',
   },
   addBtn: {
-    backgroundColor: '#3498db',
-    paddingVertical: 15,
+    backgroundColor: '#1a1a1a',
+    paddingVertical: 14,
     borderRadius: 8,
     marginBottom: 30,
   },
@@ -530,90 +556,117 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   listSection: {
     marginBottom: 30,
   },
   listTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 15,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#999',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   transactionCard: {
     backgroundColor: '#fff',
-    padding: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderRadius: 8,
-    marginBottom: 10,
+    marginBottom: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  transactionLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  categoryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  categoryIconText: {
+    fontSize: 20,
   },
   transactionInfo: {
     flex: 1,
   },
+  transactionRight: {
+    alignItems: 'flex-end',
+  },
   category: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#2c3e50',
+    color: '#1a1a1a',
   },
   date: {
     fontSize: 12,
     color: '#999',
-    marginTop: 4,
-  },
-  transactionAmount: {
-    alignItems: 'flex-end',
+    marginTop: 2,
   },
   amount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 6,
   },
-  deleteBtn: {
-    backgroundColor: '#ff6b6b',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 4,
+  deleteIconBtn: {
+    padding: 4,
   },
-  deleteBtnText: {
-    color: '#fff',
+  deleteIcon: {
+    fontSize: 24,
+    color: '#ccc',
+    fontWeight: '300',
+  },
+  summaryTitle: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#999',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   summaryRow: {
     backgroundColor: '#fff',
-    padding: 12,
+    padding: 16,
     borderRadius: 8,
-    marginBottom: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
   summaryCategory: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#2c3e50',
-    marginBottom: 5,
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  summaryRightContainer: {
+    marginTop: 8,
+  },
+  summaryBar: {
+    height: 4,
+    backgroundColor: '#FF5252',
+    borderRadius: 2,
+    marginBottom: 6,
   },
   summaryAmount: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#FF5252',
-    marginBottom: 8,
-  },
-  summaryBar: {
-    height: 6,
-    backgroundColor: '#FF5252',
-    borderRadius: 3,
-  },
-  summaryTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    textAlign: 'right',
   },
   emptyText: {
     textAlign: 'center',
-    color: '#999',
+    color: '#ccc',
     fontSize: 14,
-    paddingVertical: 20,
+    paddingVertical: 32,
   },
 });
