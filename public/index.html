@@ -222,14 +222,6 @@
             margin-bottom: 16px;
         }
 
-        /* Subcategories */
-        .subcategories {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 24px;
-        }
-
         /* Date Picker */
         .date-picker {
             display: flex;
@@ -473,7 +465,7 @@
 
                 <div class="section" id="subcategory-section" style="display: none;">
                     <button class="back-btn" onclick="goBackToCategories()">← Back</button>
-                    <div class="categories subcategories" id="subcategories"></div>
+                    <div class="categories" id="subcategories"></div>
                 </div>
 
                 <div class="section">
@@ -626,13 +618,11 @@
             const subcats = CATEGORIES[currentType][cat] || [];
             
             if (subcats.length > 0) {
-                // Show subcategories
                 showingSubcategories = true;
                 document.getElementById('category-section').style.display = 'none';
                 document.getElementById('subcategory-section').style.display = 'block';
                 renderSubcategories();
             } else {
-                // No subcategories, keep showing categories
                 renderCategories();
             }
         }
@@ -789,7 +779,6 @@
             predictedEl.textContent = `€${predictedBalance.toFixed(2)}`;
             predictedEl.className = `predicted-amount ${predictedBalance >= 0 ? 'positive' : 'negative'}`;
 
-            // Transactions list
             const list = document.getElementById('transactions-list');
             document.getElementById('trans-count').textContent = `${transactions.length} transactions`;
             list.innerHTML = transactions.length === 0 
@@ -815,8 +804,7 @@
                                 <div class="transaction-amount ${t.type}">
                                     ${t.type === 'income' ? '+' : '-'}€${t.amount.toFixed(2)}
                                 </div>
-                                <button class="delete-btn"
- onclick="deleteTransaction('${t.id}')">×</button>` : ''}
+                                <button class="delete-btn" onclick="deleteTransaction('${t.id}')">×</button>
                             </div>
                         </div>
                     `;
@@ -875,7 +863,6 @@
             summaryEl.innerHTML = html || '<div class="empty-message">No data yet</div>';
         }
 
-        // Start
         init();
     </script>
 </body>
