@@ -30,11 +30,14 @@
             background-color: #fff;
             padding: 20px;
             border-bottom: 1px solid #f0f0f0;
-            text-align: center;
+        }
+
+        .header-content {
+            margin-bottom: 16px;
         }
 
         .header-title {
-            font-size: 14px;
+            font-size: 12px;
             color: #999;
             font-weight: 600;
             margin-bottom: 8px;
@@ -43,7 +46,7 @@
         }
 
         .balance {
-            font-size: 48px;
+            font-size: 36px;
             font-weight: 700;
         }
 
@@ -53,6 +56,32 @@
 
         .balance.negative {
             color: #FF5252;
+        }
+
+        .balance-subtitle {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .predicted-balance {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .predicted-title {
+            font-size: 11px;
+            color: #999;
+            font-weight: 600;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .predicted-amount {
+            font-size: 20px;
+            font-weight: 600;
         }
 
         /* Tabs */
@@ -102,7 +131,6 @@
         .type-selector {
             display: flex;
             gap: 12px;
-            margin-bottom: 24px;
         }
 
         .type-btn {
@@ -124,7 +152,8 @@
         }
 
         /* Input */
-        input {
+        input[type="number"],
+        input[type="text"] {
             width: 100%;
             padding: 14px 16px;
             border: 1px solid #e0e0e0;
@@ -136,6 +165,27 @@
 
         input::placeholder {
             color: #ccc;
+        }
+
+        /* Checkbox */
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .checkbox-container label {
+            cursor: pointer;
+            font-weight: 500;
+            color: #666;
         }
 
         /* Category Buttons */
@@ -220,6 +270,11 @@
             border: 1px solid #f0f0f0;
         }
 
+        .transaction.recurring {
+            border-left: 4px solid #3498db;
+            background-color: #f8fbff;
+        }
+
         .transaction-left {
             display: flex;
             align-items: center;
@@ -259,6 +314,17 @@
             font-size: 12px;
             color: #999;
             margin-top: 2px;
+        }
+
+        .transaction-recurring-badge {
+            display: inline-block;
+            background-color: #3498db;
+            color: #fff;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 6px;
+            font-weight: 600;
         }
 
         .transaction-right {
@@ -350,8 +416,14 @@
     <div class="container">
         <!-- Header -->
         <header>
-            <div class="header-title">Total Balance</div>
-            <div class="balance" id="balance">€0.00</div>
+            <div class="header-content">
+                <div class="header-title">Total Balance</div>
+                <div class="balance" id="balance">€0.00</div>
+            </div>
+            <div class="predicted-balance">
+                <div class="predicted-title">Predicted Balance (with recurring)</div>
+                <div class="predicted-amount" id="predicted-balance">€0.00</div>
+            </div>
         </header>
 
         <!-- Tabs -->
@@ -391,6 +463,13 @@
                     </div>
                 </div>
 
+                <div class="section">
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="recurring-checkbox">
+                        <label for="recurring-checkbox">Make this recurring (monthly)</label>
+                    </div>
+                </div>
+
                 <button class="add-btn" onclick="addTransaction()">Add Transaction</button>
 
                 <div>
@@ -415,9 +494,11 @@
         const STORAGE_KEY = 'financeTrackerData';
 
         let transactions = [];
+        let recurringTransactions = [];
         let currentType = 'expense';
         let selectedCategory = 'Food';
         let selectedDate = new Date();
+        let isRecurring = false;
 
         // Initialize
         function init() {
@@ -431,13 +512,49 @@
         function loadData() {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) {
-                transactions = JSON.parse(saved);
+                const data = JSON.parse(saved);
+                transactions = data.transactions || [];
+                recurringTransactions = data.recurring || [];
+                // Auto-generate recurring transactions for current month
+                generateRecurringForCurrentMonth();
             }
         }
 
         // Save data to localStorage
         function saveData() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                transactions,
+                recurring: recurringTransactions
+            }));
+        }
+
+        // Generate recurring transactions for current month
+        function generateRecurringForCurrentMonth() {
+            const today = new Date();
+            const currentMonth = `${today.getFullYear()}-${String(today.getMonth()).padStart(2, '0')}`;
+
+            recurringTransactions.forEach(recurring => {
+                const lastGenerated = recurring.lastGenerated || '2000-01';
+                if (lastGenerated < currentMonth) {
+                    const transactionDate = new Date(today.getFullYear(), today.getMonth(), recurring.date);
+                    if (transactionDate > today) {
+                        transactionDate.setMonth(transactionDate.getMonth() - 1);
+                    }
+
+                    transactions.push({
+                        id: `recurring-${recurring.id}-${currentMonth}`,
+                        amount: recurring.amount,
+                        category: recurring.category,
+                        type: recurring.type,
+                        date: transactionDate.toLocaleDateString(),
+                        isRecurring: true,
+                        recurringId: recurring.id
+                    });
+
+                    recurring.lastGenerated = currentMonth;
+                }
+            });
+            saveData();
         }
 
         // Render categories
@@ -456,15 +573,6 @@
             currentType = type;
             selectedCategory = currentType === 'expense' ? EXPENSE_CATEGORIES[0] : INCOME_CATEGORIES[0];
             renderCategories();
-            updateTypeButtons();
-        }
-
-        // Update type buttons
-        function updateTypeButtons() {
-            document.querySelectorAll('.type-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
         }
 
         // Set category
@@ -492,16 +600,43 @@
                 return;
             }
 
-            transactions.push({
-                id: Date.now().toString(),
-                amount,
-                category: selectedCategory,
-                type: currentType,
-                date: selectedDate.toLocaleDateString()
-            });
+            isRecurring = document.getElementById('recurring-checkbox').checked;
+
+            if (isRecurring) {
+                // Add as recurring
+                recurringTransactions.push({
+                    id: Date.now().toString(),
+                    amount,
+                    category: selectedCategory,
+                    type: currentType,
+                    date: selectedDate.getDate(),
+                    lastGenerated: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth()).padStart(2, '0')}`
+                });
+                // Generate current month transaction
+                transactions.push({
+                    id: `recurring-${Date.now()}`,
+                    amount,
+                    category: selectedCategory,
+                    type: currentType,
+                    date: selectedDate.toLocaleDateString(),
+                    isRecurring: true,
+                    recurringId: Date.now().toString()
+                });
+            } else {
+                // Add as one-time transaction
+                transactions.push({
+                    id: Date.now().toString(),
+                    amount,
+                    category: selectedCategory,
+                    type: currentType,
+                    date: selectedDate.toLocaleDateString(),
+                    isRecurring: false
+                });
+            }
 
             saveData();
             document.getElementById('amount').value = '';
+            document.getElementById('recurring-checkbox').checked = false;
             selectedDate = new Date();
             updateDate();
             updateDisplay();
@@ -524,17 +659,37 @@
 
         // Calculate balance
         function getBalance() {
-            return transactions.reduce((sum, t) => {
+            return transactions.filter(t => !t.isRecurring || t.date === new Date().toLocaleDateString()).reduce((sum, t) => {
                 return t.type === 'income' ? sum + t.amount : sum - t.amount;
             }, 0);
+        }
+
+        // Calculate predicted balance (with recurring)
+        function getPredictedBalance() {
+            let predicted = getBalance();
+            // Add all recurring transactions for next 12 months (average)
+            recurringTransactions.forEach(r => {
+                if (r.type === 'income') {
+                    predicted += r.amount;
+                } else {
+                    predicted -= r.amount;
+                }
+            });
+            return predicted;
         }
 
         // Update display
         function updateDisplay() {
             const balance = getBalance();
+            const predictedBalance = getPredictedBalance();
+
             const balanceEl = document.getElementById('balance');
             balanceEl.textContent = `€${balance.toFixed(2)}`;
             balanceEl.className = `balance ${balance >= 0 ? 'positive' : 'negative'}`;
+
+            const predictedEl = document.getElementById('predicted-balance');
+            predictedEl.textContent = `€${predictedBalance.toFixed(2)}`;
+            predictedEl.className = `predicted-amount ${predictedBalance >= 0 ? 'positive' : 'negative'}`;
 
             // Transactions list
             const list = document.getElementById('transactions-list');
@@ -542,13 +697,16 @@
             list.innerHTML = transactions.length === 0 
                 ? '<div class="empty-message">No transactions yet</div>'
                 : transactions.map(t => `
-                    <div class="transaction">
+                    <div class="transaction ${t.isRecurring ? 'recurring' : ''}">
                         <div class="transaction-left">
                             <div class="transaction-icon ${t.type}">
                                 ${t.type === 'income' ? '📥' : '📤'}
                             </div>
                             <div class="transaction-info">
-                                <div class="transaction-category">${t.category}</div>
+                                <div class="transaction-category">
+                                    ${t.category}
+                                    ${t.isRecurring ? '<span class="transaction-recurring-badge">🔄 Monthly</span>' : ''}
+                                </div>
                                 <div class="transaction-date">${t.date}</div>
                             </div>
                         </div>
@@ -556,7 +714,7 @@
                             <div class="transaction-amount ${t.type}">
                                 ${t.type === 'income' ? '+' : '-'}€${t.amount.toFixed(2)}
                             </div>
-                            <button class="delete-btn" onclick="deleteTransaction('${t.id}')">×</button>
+                            ${!t.isRecurring ? `<button class="delete-btn" onclick="deleteTransaction('${t.id}')">×</button>` : ''}
                         </div>
                     </div>
                 `).join('');
