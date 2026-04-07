@@ -58,12 +58,6 @@
             color: #FF5252;
         }
 
-        .balance-subtitle {
-            font-size: 12px;
-            color: #999;
-            margin-top: 4px;
-        }
-
         .predicted-balance {
             margin-top: 16px;
             padding-top: 16px;
@@ -214,6 +208,31 @@
             border-color: #1a1a1a;
         }
 
+        /* Subcategories */
+        .subcategories-container {
+            margin-bottom: 24px;
+        }
+
+        .subcategory-btn {
+            padding: 10px 14px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #f5f5f5;
+            cursor: pointer;
+            font-weight: 500;
+            color: #666;
+            font-size: 14px;
+            transition: all 0.3s;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        .subcategory-btn.active {
+            background-color: #1a1a1a;
+            color: #fff;
+            border-color: #1a1a1a;
+        }
+
         /* Date Picker */
         .date-picker {
             display: flex;
@@ -308,6 +327,12 @@
             font-weight: 600;
             color: #1a1a1a;
             font-size: 14px;
+        }
+
+        .transaction-description {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
         }
 
         .transaction-date {
@@ -445,13 +470,23 @@
                 </div>
 
                 <div class="section">
+                    <div class="section-label">Category</div>
+                    <div class="categories" id="categories"></div>
+                </div>
+
+                <div class="subcategories-container" id="subcategories-container" style="display: none;">
+                    <div class="section-label">Subcategory</div>
+                    <div id="subcategories"></div>
+                </div>
+
+                <div class="section">
                     <div class="section-label">Amount</div>
                     <input type="number" id="amount" placeholder="0.00" step="0.01">
                 </div>
 
                 <div class="section">
-                    <div class="section-label">Category</div>
-                    <div class="categories" id="categories"></div>
+                    <div class="section-label">Description (Optional)</div>
+                    <input type="text" id="description" placeholder="Add a description...">
                 </div>
 
                 <div class="section">
@@ -489,14 +524,31 @@
     </div>
 
     <script>
-        const EXPENSE_CATEGORIES = ['Food', 'Transport', 'Entertainment', 'Bills', 'Other'];
-        const INCOME_CATEGORIES = ['Salary', 'Freelance', 'Bonus', 'Bank Transfer', 'Other'];
+        const CATEGORIES = {
+            expense: {
+                'Food': ['Dinner', 'Lunch', 'Groceries'],
+                'Transport': ['Gasoline', 'Flights', 'Bus', 'Trains', 'Metro'],
+                'Bills': ['Electricity', 'Heating', 'Rental'],
+                'Subscriptions': ['Car Payment', 'INPS'],
+                'Shopping': [],
+                'Entertainment': [],
+                'Other': []
+            },
+            income: {
+                'Salary': [],
+                'Bonus': [],
+                'Bank Transfer': [],
+                'Other': []
+            }
+        };
+
         const STORAGE_KEY = 'financeTrackerData';
 
         let transactions = [];
         let recurringTransactions = [];
         let currentType = 'expense';
         let selectedCategory = 'Food';
+        let selectedSubcategory = null;
         let selectedDate = new Date();
         let isRecurring = false;
 
@@ -515,7 +567,6 @@
                 const data = JSON.parse(saved);
                 transactions = data.transactions || [];
                 recurringTransactions = data.recurring || [];
-                // Auto-generate recurring transactions for current month
                 generateRecurringForCurrentMonth();
             }
         }
@@ -545,6 +596,8 @@
                         id: `recurring-${recurring.id}-${currentMonth}`,
                         amount: recurring.amount,
                         category: recurring.category,
+                        subcategory: recurring.subcategory,
+                        description: recurring.description,
                         type: recurring.type,
                         date: transactionDate.toLocaleDateString(),
                         isRecurring: true,
@@ -559,26 +612,54 @@
 
         // Render categories
         function renderCategories() {
-            const cats = currentType === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+            const cats = CATEGORIES[currentType];
             const container = document.getElementById('categories');
-            container.innerHTML = cats.map(cat => `
+            container.innerHTML = Object.keys(cats).map(cat => `
                 <button class="category-btn ${cat === selectedCategory ? 'active' : ''}" onclick="setCategory('${cat}')">
                     ${cat}
                 </button>
             `).join('');
+            renderSubcategories();
+        }
+
+        // Render subcategories
+        function renderSubcategories() {
+            const subcats = CATEGORIES[currentType][selectedCategory] || [];
+            const container = document.getElementById('subcategories-container');
+            const subContainer = document.getElementById('subcategories');
+
+            if (subcats.length > 0) {
+                container.style.display = 'block';
+                subContainer.innerHTML = subcats.map(subcat => `
+                    <button class="subcategory-btn ${subcat === selectedSubcategory ? 'active' : ''}" onclick="setSubcategory('${subcat}')">
+                        ${subcat}
+                    </button>
+                `).join('');
+            } else {
+                container.style.display = 'none';
+                selectedSubcategory = null;
+            }
         }
 
         // Set type
         function setType(type) {
             currentType = type;
-            selectedCategory = currentType === 'expense' ? EXPENSE_CATEGORIES[0] : INCOME_CATEGORIES[0];
+            selectedCategory = Object.keys(CATEGORIES[currentType])[0];
+            selectedSubcategory = null;
             renderCategories();
         }
 
         // Set category
         function setCategory(cat) {
             selectedCategory = cat;
-            renderCategories();
+            selectedSubcategory = null;
+            renderSubcategories();
+        }
+
+        // Set subcategory
+        function setSubcategory(subcat) {
+            selectedSubcategory = subcat;
+            renderSubcategories();
         }
 
         // Change date
@@ -595,6 +676,8 @@
         // Add transaction
         function addTransaction() {
             const amount = parseFloat(document.getElementById('amount').value);
+            const description = document.getElementById('description').value.trim();
+
             if (!amount || amount <= 0) {
                 alert('Please enter a valid amount');
                 return;
@@ -602,32 +685,37 @@
 
             isRecurring = document.getElementById('recurring-checkbox').checked;
 
+            const finalCategory = selectedSubcategory || selectedCategory;
+
             if (isRecurring) {
-                // Add as recurring
                 recurringTransactions.push({
                     id: Date.now().toString(),
                     amount,
                     category: selectedCategory,
+                    subcategory: selectedSubcategory,
+                    description,
                     type: currentType,
                     date: selectedDate.getDate(),
                     lastGenerated: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth()).padStart(2, '0')}`
                 });
-                // Generate current month transaction
                 transactions.push({
                     id: `recurring-${Date.now()}`,
                     amount,
                     category: selectedCategory,
+                    subcategory: selectedSubcategory,
+                    description,
                     type: currentType,
                     date: selectedDate.toLocaleDateString(),
                     isRecurring: true,
                     recurringId: Date.now().toString()
                 });
             } else {
-                // Add as one-time transaction
                 transactions.push({
                     id: Date.now().toString(),
                     amount,
                     category: selectedCategory,
+                    subcategory: selectedSubcategory,
+                    description,
                     type: currentType,
                     date: selectedDate.toLocaleDateString(),
                     isRecurring: false
@@ -636,6 +724,7 @@
 
             saveData();
             document.getElementById('amount').value = '';
+            document.getElementById('description').value = '';
             document.getElementById('recurring-checkbox').checked = false;
             selectedDate = new Date();
             updateDate();
@@ -659,15 +748,14 @@
 
         // Calculate balance
         function getBalance() {
-            return transactions.filter(t => !t.isRecurring || t.date === new Date().toLocaleDateString()).reduce((sum, t) => {
+            return transactions.reduce((sum, t) => {
                 return t.type === 'income' ? sum + t.amount : sum - t.amount;
             }, 0);
         }
 
-        // Calculate predicted balance (with recurring)
+        // Calculate predicted balance
         function getPredictedBalance() {
             let predicted = getBalance();
-            // Add all recurring transactions for next 12 months (average)
             recurringTransactions.forEach(r => {
                 if (r.type === 'income') {
                     predicted += r.amount;
@@ -696,87 +784,84 @@
             document.getElementById('trans-count').textContent = `${transactions.length} transactions`;
             list.innerHTML = transactions.length === 0 
                 ? '<div class="empty-message">No transactions yet</div>'
-                : transactions.map(t => `
-                    <div class="transaction ${t.isRecurring ? 'recurring' : ''}">
-                        <div class="transaction-left">
-                            <div class="transaction-icon ${t.type}">
-                                ${t.type === 'income' ? '📥' : '📤'}
-                            </div>
-                            <div class="transaction-info">
-                                <div class="transaction-category">
-                                    ${t.category}
-                                    ${t.isRecurring ? '<span class="transaction-recurring-badge">🔄 Monthly</span>' : ''}
+                : transactions.map(t => {
+                    const displayCategory = t.subcategory || t.category;
+                    return `
+                        <div class="transaction ${t.isRecurring ? 'recurring' : ''}">
+                            <div class="transaction-left">
+                                <div class="transaction-icon ${t.type}">
+                                    ${t.type === 'income' ? '📥' : '📤'}
                                 </div>
-                                <div class="transaction-date">${t.date}</div>
+                                <div class="transaction-info">
+                                    <div class="transaction-category">
+                                        ${displayCategory}
+                                        ${t.isRecurring ? '<span class="transaction-recurring-badge">🔄 Monthly</span>' : ''}
+                                    </div>
+                                    ${t.description ? `<div class="transaction-description">${t.description}</div>` : ''}
+                                    <div class="transaction-date">${t.date}</div>
+                                </div>
+                            </div>
+                            <div class="transaction-right">
+                                <div class="transaction-amount ${t.type}">
+                                    ${t.type === 'income' ? '+' : '-'}€${t.amount.toFixed(2)}
+                                </div>
+                                ${!t.isRecurring ? `<button class="delete-btn" onclick="deleteTransaction('${t.id}')">×</button>` : ''}
                             </div>
                         </div>
-                        <div class="transaction-right">
-                            <div class="transaction-amount ${t.type}">
-                                ${t.type === 'income' ? '+' : '-'}€${t.amount.toFixed(2)}
-                            </div>
-                            ${!t.isRecurring ? `<button class="delete-btn" onclick="deleteTransaction('${t.id}')">×</button>` : ''}
-                        </div>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
 
-            // Summary
             updateSummary();
         }
 
         // Update summary
         function updateSummary() {
-            const expenseByCategory = {};
-            const incomeByCategory = {};
+            const summary = {};
 
-            EXPENSE_CATEGORIES.forEach(cat => {
-                expenseByCategory[cat] = transactions
-                    .filter(t => t.category === cat && t.type === 'expense')
-                    .reduce((sum, t) => sum + t.amount, 0);
+            transactions.forEach(t => {
+                const category = t.subcategory || t.category;
+                if (!summary[category]) {
+                    summary[category] = { amount: 0, type: t.type };
+                }
+                summary[category].amount += t.amount;
             });
 
-            INCOME_CATEGORIES.forEach(cat => {
-                incomeByCategory[cat] = transactions
-                    .filter(t => t.category === cat && t.type === 'income')
-                    .reduce((sum, t) => sum + t.amount, 0);
-            });
-
-            const summary = document.getElementById('summary-list');
+            const summaryEl = document.getElementById('summary-list');
             let html = '';
 
-            const maxExpense = Math.max(...Object.values(expenseByCategory), 1);
-            const maxIncome = Math.max(...Object.values(incomeByCategory), 1);
+            const expenses = Object.entries(summary).filter(([_, s]) => s.type === 'expense');
+            const incomes = Object.entries(summary).filter(([_, s]) => s.type === 'income');
 
-            if (Object.values(expenseByCategory).some(v => v > 0)) {
+            const maxExpense = Math.max(...expenses.map(([_, s]) => s.amount), 1);
+            const maxIncome = Math.max(...incomes.map(([_, s]) => s.amount), 1);
+
+            if (expenses.length > 0) {
                 html += '<div class="section-title" style="color: #FF5252; margin-top: 0;">Expenses</div>';
-                html += Object.entries(expenseByCategory)
-                    .filter(([_, amount]) => amount > 0)
-                    .map(([cat, amount]) => `
-                        <div class="summary-row">
-                            <div class="summary-category">${cat}</div>
-                            <div class="summary-bar-container">
-                                <div class="summary-bar" style="width: ${(amount/maxExpense)*100}%"></div>
-                            </div>
-                            <div class="summary-amount">€${amount.toFixed(2)}</div>
+                html += expenses.map(([cat, s]) => `
+                    <div class="summary-row">
+                        <div class="summary-category">${cat}</div>
+                        <div class="summary-bar-container">
+                            <div class="summary-bar" style="width: ${(s.amount/maxExpense)*100}%"></div>
                         </div>
-                    `).join('');
+                        <div class="summary-amount">€${s.amount.toFixed(2)}</div>
+                    </div>
+                `).join('');
             }
 
-            if (Object.values(incomeByCategory).some(v => v > 0)) {
+            if (incomes.length > 0) {
                 html += '<div class="section-title" style="color: #4CAF50; margin-top: 24px;">Income</div>';
-                html += Object.entries(incomeByCategory)
-                    .filter(([_, amount]) => amount > 0)
-                    .map(([cat, amount]) => `
-                        <div class="summary-row">
-                            <div class="summary-category">${cat}</div>
-                            <div class="summary-bar-container">
-                                <div class="summary-bar income" style="width: ${(amount/maxIncome)*100}%"></div>
-                            </div>
-                            <div class="summary-amount income">€${amount.toFixed(2)}</div>
+                html += incomes.map(([cat, s]) => `
+                    <div class="summary-row">
+                        <div class="summary-category">${cat}</div>
+                        <div class="summary-bar-container">
+                            <div class="summary-bar income" style="width: ${(s.amount/maxIncome)*100}%"></div>
                         </div>
-                    `).join('');
+                        <div class="summary-amount income">€${s.amount.toFixed(2)}</div>
+                    </div>
+                `).join('');
             }
 
-            summary.innerHTML = html || '<div class="empty-message">No data yet</div>';
+            summaryEl.innerHTML = html || '<div class="empty-message">No data yet</div>';
         }
 
         // Start
