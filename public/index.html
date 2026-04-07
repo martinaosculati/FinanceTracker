@@ -815,7 +815,8 @@
                                 <div class="transaction-amount ${t.type}">
                                     ${t.type === 'income' ? '+' : '-'}€${t.amount.toFixed(2)}
                                 </div>
-                                ${!t.isRecurring ? `<button class="delete-btn" onclick="deleteTransaction('${t.id}')">×</button>` : ''}
+                                <button class="delete-btn"
+ onclick="deleteTransaction('${t.id}')">×</button>` : ''}
                             </div>
                         </div>
                     `;
