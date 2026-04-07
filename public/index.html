@@ -147,7 +147,8 @@
 
         /* Input */
         input[type="number"],
-        input[type="text"] {
+        input[type="text"],
+        select {
             width: 100%;
             padding: 14px 16px;
             border: 1px solid #e0e0e0;
@@ -155,10 +156,27 @@
             font-size: 16px;
             font-weight: 500;
             margin-bottom: 24px;
+            background-color: #f5f5f5;
+        }
+
+        select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 20px;
+            padding-right: 40px;
         }
 
         input::placeholder {
             color: #ccc;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #1a1a1a;
+            background-color: #fff;
         }
 
         /* Checkbox */
@@ -203,31 +221,6 @@
         }
 
         .category-btn.active {
-            background-color: #1a1a1a;
-            color: #fff;
-            border-color: #1a1a1a;
-        }
-
-        /* Subcategories */
-        .subcategories-container {
-            margin-bottom: 24px;
-        }
-
-        .subcategory-btn {
-            padding: 10px 14px;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            background-color: #f5f5f5;
-            cursor: pointer;
-            font-weight: 500;
-            color: #666;
-            font-size: 14px;
-            transition: all 0.3s;
-            margin-right: 8px;
-            margin-bottom: 8px;
-        }
-
-        .subcategory-btn.active {
             background-color: #1a1a1a;
             color: #fff;
             border-color: #1a1a1a;
@@ -474,9 +467,11 @@
                     <div class="categories" id="categories"></div>
                 </div>
 
-                <div class="subcategories-container" id="subcategories-container" style="display: none;">
+                <div class="section" id="subcategories-container" style="display: none;">
                     <div class="section-label">Subcategory</div>
-                    <div id="subcategories"></div>
+                    <select id="subcategories-select" onchange="setSubcategoryFromSelect()">
+                        <option value="">Select subcategory...</option>
+                    </select>
                 </div>
 
                 <div class="section">
@@ -626,15 +621,13 @@
         function renderSubcategories() {
             const subcats = CATEGORIES[currentType][selectedCategory] || [];
             const container = document.getElementById('subcategories-container');
-            const subContainer = document.getElementById('subcategories');
+            const selectEl = document.getElementById('subcategories-select');
 
             if (subcats.length > 0) {
                 container.style.display = 'block';
-                subContainer.innerHTML = subcats.map(subcat => `
-                    <button class="subcategory-btn ${subcat === selectedSubcategory ? 'active' : ''}" onclick="setSubcategory('${subcat}')">
-                        ${subcat}
-                    </button>
-                `).join('');
+                selectEl.innerHTML = '<option value="">Select subcategory...</option>' + 
+                    subcats.map(subcat => `<option value="${subcat}">${subcat}</option>`).join('');
+                selectedSubcategory = null;
             } else {
                 container.style.display = 'none';
                 selectedSubcategory = null;
@@ -656,10 +649,10 @@
             renderSubcategories();
         }
 
-        // Set subcategory
-        function setSubcategory(subcat) {
-            selectedSubcategory = subcat;
-            renderSubcategories();
+        // Set subcategory from select
+        function setSubcategoryFromSelect() {
+            const selectEl = document.getElementById('subcategories-select');
+            selectedSubcategory = selectEl.value || null;
         }
 
         // Change date
@@ -684,8 +677,6 @@
             }
 
             isRecurring = document.getElementById('recurring-checkbox').checked;
-
-            const finalCategory = selectedSubcategory || selectedCategory;
 
             if (isRecurring) {
                 recurringTransactions.push({
